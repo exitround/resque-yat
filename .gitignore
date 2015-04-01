@@ -1,3 +1,6 @@
 pkg/
 .env
 spec/vcr_cassettes
+.idea/
+.DS_Store
+rdoc/
