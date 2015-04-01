@@ -7,4 +7,4 @@ group :development do
   gem "jeweler"
 end
 
-gem 'resque'
+gem 'resque', '~> 1.25.2'

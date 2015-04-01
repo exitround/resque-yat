@@ -1,19 +1,18 @@
-require 'resque'
-
 # Here is an example how to limit rates with resque-yat:
 #
 #   class MyQueueClass
-#     @queue_name = :MyTestQueue
+#     @queue = :MyTestQueue
 #
 #     # Specify rates for the queue
 #     # This limits the queue to 25 calls per hour or 2500 calls per day
 #     # It is assumed that the task will make at most 5 calls that
 #     # count against the limit.
+#     extend Resque::Plugins::Yat
 #     limit_rate 1.hour => 25, 1.day => 2500, :reserved_rate => 5
 #
 #     def self.perform
 #       # Call the api that we want to rate limit.
-#       some_data = some_thir_party.call_api()
+#       some_data = some_third_party.call_api()
 #       # Every time we make a call, we let the throttler know about it.
 #       consume_rate
 #     end
