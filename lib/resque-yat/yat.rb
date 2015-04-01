@@ -27,6 +27,10 @@
 
 module Resque::Plugins
   module Yat
+    def self.consume_rate(amount=1, api=nil)
+      Resque::Job.current_job.consume_rate(amount, api)
+    end
+
     module PerformerClassExtension
       def restrictions
         @restrictions ||= []
@@ -38,7 +42,7 @@ module Resque::Plugins
       # Call this method to let resque-yat that a call was made that
       # should count against the rate limit.
       def consume_rate(amount=1, api=nil)
-        Resque::Job.current_job.consume_rate(amount, api)
+        Yat.consume_rate(amount, api)
       end
 
       def limit_rate(opts = {})
