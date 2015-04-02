@@ -41,10 +41,6 @@ module RateLimiter
       @limit = limit
     end
 
-    def hash_key
-      [queue_name, period]
-    end
-
     def to_s
       "Rate restriction of #{self.limit} per #{self.period} for queue #{self.queue_name}"
     end
@@ -116,9 +112,7 @@ module RateLimiter
 
     # Adds a new restriction to the internal collection of restrictions
     def add_restriction(restriction)
-      duplicate = @restrictions[restriction.queue_name].any? {|r| r.hash_key == restriction.hash_key}
-      raise RateLimiterError.new("Already registered restriction for this period") if duplicate
-
+      @restrictions[restriction.queue_name].delete_if {|r| r.period == restriction.period}
       @restrictions[restriction.queue_name] << restriction
     end
 
