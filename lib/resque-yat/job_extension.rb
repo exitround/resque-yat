@@ -12,6 +12,7 @@ module Resque
         r = perform_without_limiter
       ensure
         reimburse_rate(self.rate_limit_txs[0].amount - @consumed_amount)
+        Job.current_job = nil # not that this is really required
       end
       r
     end

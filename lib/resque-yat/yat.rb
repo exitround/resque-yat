@@ -28,7 +28,7 @@
 module Resque::Plugins
   module Yat
     def self.consume_rate(amount=1, api=nil)
-      Resque::Job.current_job.consume_rate(amount, api)
+      Resque::Job.current_job.consume_rate(amount, api) if Resque::Job.current_job
     end
 
     module PerformerClassExtension
