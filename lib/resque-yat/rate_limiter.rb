@@ -62,13 +62,15 @@ module RateLimiter
     # Creates the counter
     def create_counter(redis)
       name = "ratelimiter:#{self.queue_name}-#{self.period}-#{SecureRandom.uuid}"
-      redis.multi do
-        # Set the counter name key
-        redis.psetex(name, self.period * 1000, 0)
-        # Set the counter to zero. Both are set to expire at the end of the period.
-        redis.psetex(self.counter_name_key, self.period * 1000, name)
+      wr = redis.watch(self.counter_name_key) do
+        mr = redis.multi do
+          # Set the counter name key
+          redis.psetex(name, self.period * 1000, 0)
+          # Set the counter to zero. Both are set to expire at the end of the period.
+          redis.psetex(self.counter_name_key, self.period * 1000, name)
+        end
       end
-      name
+      redis.get(self.counter_name_key)
     end
 
     # Increases the counter by the given amount. Returns the transaction info.
