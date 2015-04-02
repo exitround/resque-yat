@@ -63,7 +63,7 @@ module Resque
             job.rate_limit_txs = rate_limit_txs
           else
             # There was an error, or queue is empty - reimburse the reserved amount
-            Resque.rate_limiter.reimburse(rate_limit_txs, rate_limit_txs.amount)
+            Resque.rate_limiter.reimburse(rate_limit_txs, rate_limit_txs[0].amount)
           end
         end
 
