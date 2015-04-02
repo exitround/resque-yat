@@ -6,12 +6,14 @@ module Resque
     def perform_with_limiter
       return perform_without_limiter unless is_rate_restricted?
 
-      Job.current_job = self
       begin
+        Job.current_job = self
         @consumed_amount = 0
+
         r = perform_without_limiter
+
       ensure
-        reimburse_rate(self.rate_limit_txs[0].amount - @consumed_amount)
+        adjust_rate
         Job.current_job = nil # not that this is really required
       end
       r
@@ -19,12 +21,20 @@ module Resque
     alias_method :perform_without_limiter, :perform
     alias_method :perform, :perform_with_limiter
 
-    def reimburse_rate(amount)
-      raise "Reimburse amount is greater than reserved amount" if amount > self.rate_limit_txs[0].amount
-      Resque.rate_limiter.reimburse(self.rate_limit_txs, amount) if amount > 0
+    def adjust_rate
+      leftover = self.rate_limit_txs[0].amount - @consumed_amount
+
+      if leftover < 0
+        # we overconsumed
+        Resque.rate_limiter.consume(self.rate_limit_txs[0].restriction.queue_name, -leftover)
+      elsif leftover > 0
+        # reimburse
+        Resque.rate_limiter.reimburse(self.rate_limit_txs, leftover)
+      end
     end
+
     def consume_rate(amount=1, api=nil)
-      @consumed_amount += 1
+      @consumed_amount += amount
     end
 
     def is_rate_restricted?

@@ -80,7 +80,7 @@ module RateLimiter
 
   # Represents a counter transaction.
   class RestrictionTx
-    attr_reader :counter_name, :amount
+    attr_reader :restriction, :counter_name, :amount
     def initialize(restriction, counter_name, amount, result)
       @restriction = restriction
       @counter_name = counter_name
