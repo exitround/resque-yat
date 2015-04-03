@@ -45,6 +45,7 @@ module Resque::Plugins
         Yat.consume_rate(amount, api)
       end
 
+      # Specifies rate limits for the current queue
       def limit_rate(opts = {})
         opts = opts.clone
         queue_name = Resque.queue_from_class(self).to_s
@@ -55,16 +56,24 @@ module Resque::Plugins
         end
         if opts.include?(:reserved_rate)
           @reserved_rate = opts[:reserved_rate].to_i
-          Resque.reserved_rates[queue_name] = @reserved_rate
+          Resque::Job.reserved_rates[queue_name] = @reserved_rate
           opts.delete(:reserved_rate)
         end
 
         opts.each do |o|
           restriction = RateLimiter::RateRestriction.new(queue_name, o[0], o[1])
           self.restrictions << restriction
-          Resque.rate_limiter.add_restriction(restriction)
+          Resque::Job.rate_limiter.add_restriction(restriction)
         end
       end
+
+      # Specifies concurrency limits for the current queue
+      def limit_concurrency(limit)
+        queue_name = Resque.queue_from_class(self).to_s
+        restriction = ConcurrencyLimiter::ConcurrencyRestriction.new(queue_name, limit)
+        Resque::Job.concurrency_limiter.add_restriction(restriction)
+      end
+
     end
 
     def self.extended(cls)
