@@ -65,9 +65,9 @@ module RateLimiter
       wr = redis.watch(self.counter_name_key) do
         mr = redis.multi do
           # Set the counter name key
-          redis.psetex(name, self.period * 1000, 0)
+          redis.setex(name, self.period, 0)
           # Set the counter to zero. Both are set to expire at the end of the period.
-          redis.psetex(self.counter_name_key, self.period * 1000, name)
+          redis.setex(self.counter_name_key, self.period, name)
         end
       end
       redis.get(self.counter_name_key)
