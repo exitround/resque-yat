@@ -45,38 +45,62 @@ module RateLimiter
       "Rate restriction of #{self.limit} per #{self.period} for queue #{self.queue_name}"
     end
 
-    # Redis key containing the number of calls made in the current period
-    # This name will change at the start of the period (e.g. at the first moment of the hour,
-    # if it's an hourly limit)
-    def counter_name(redis)
-      name = redis.get(self.counter_name_key)
-      name = create_counter(redis) if name.nil?
-      name
-    end
-
     # This Redis key contains the name of the counter key. It's derived from the queue attributes.
     def counter_name_key
       "ratelimiter:#{self.queue_name}-#{self.period}"
     end
 
-    # Creates the counter
-    def create_counter(redis)
-      name = "ratelimiter:#{self.queue_name}-#{self.period}-#{SecureRandom.uuid}"
-      wr = redis.watch(self.counter_name_key) do
-        mr = redis.multi do
-          # Set the counter name key
-          redis.setex(name, self.period, 0)
-          # Set the counter to zero. Both are set to expire at the end of the period.
-          redis.setex(self.counter_name_key, self.period, name)
+    def consume(redis, amount)
+      new_amount = nil
+      counter_name = nil
+
+      mr = redis.watch(self.counter_name_key) do
+        counter_name = redis.get(self.counter_name_key)
+        if counter_name.nil? # counter doesn't exist
+          counter_name = "ratelimiter:#{self.queue_name}-#{self.period}-#{SecureRandom.uuid}"
+          new_amount = create_counter(redis, counter_name, amount)
+        else
+          new_amount = modify_counter(redis, counter_name, amount)
         end
       end
-      redis.get(self.counter_name_key)
+
+      return nil if new_amount.nil?
+      RestrictionTx.new(self, counter_name, amount, new_amount)
     end
 
-    # Increases the counter by the given amount. Returns the transaction info.
-    def consume(redis, amount)
-      counter_name = self.counter_name(redis)
-      RestrictionTx.new(self, counter_name, amount, redis.incrby(counter_name, amount))
+    def reimburse(redis, tx, amount)
+      redis.watch(self.counter_name_key) do
+        modify_counter(redis, tx.counter_name, -amount)
+      end
+    end
+
+    def create_counter(redis, counter_name, amount)
+      mr = redis.multi do
+        # Set the counter name key
+        redis.setex(self.counter_name_key, self.period, counter_name)
+        # Set the counter initial value. Both are set to expire at the end of the period.
+        redis.setex(counter_name, self.period, amount)
+      end
+      return mr && amount
+    end
+
+    def modify_counter(redis, counter_name, amount)
+      mr = redis.multi do
+        redis.incrby(counter_name, amount)
+        redis.ttl(counter_name)
+      end
+      return nil if mr.nil?
+
+      new_amount, ttl = mr
+      if ttl < 0
+        # The counter has no expiration on it,
+        # which mean it had expired and INCRBY just created it.
+        # We need to delete it and ignore this transaction
+        redis.del(counter_name)
+        return nil
+      end
+
+      new_amount
     end
   end
 
@@ -128,9 +152,10 @@ module RateLimiter
       # Go increment counters for all limits of the queue
       txs = []
       restrictions.each do |restriction|
-        txs << (tx = restriction.consume(self.redis, amount))
+        tx = restriction.consume(self.redis, amount)
+        txs << tx if tx
 
-        if tx.exceeds_limit
+        if tx.nil? || tx.exceeds_limit
           # One of the transactions exceeded the limit, roll them all back
           reimburse(txs, amount)
           return nil
@@ -146,8 +171,7 @@ module RateLimiter
     def reimburse(txs, amount=1)
       txs.each do |tx|
         raise RateLimiterError.new("Rollback amount is greater than transaction amount") if amount > tx.amount
-        next unless redis.exists(tx.counter_name)
-        redis.decrby(tx.counter_name, amount)
+        tx.restriction.reimburse(redis, tx, amount)
       end
     end
   end

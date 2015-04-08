@@ -68,9 +68,9 @@ module Resque::Plugins
       end
 
       # Specifies concurrency limits for the current queue
-      def limit_concurrency(limit)
+      def limit_concurrency(limit, ttl=5*60)
         queue_name = Resque.queue_from_class(self).to_s
-        restriction = ConcurrencyLimiter::ConcurrencyRestriction.new(queue_name, limit)
+        restriction = ConcurrencyLimiter::ConcurrencyRestriction.new(queue_name, limit, ttl)
         Resque::Job.concurrency_limiter.add_restriction(restriction)
       end
 

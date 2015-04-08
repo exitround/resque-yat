@@ -1,9 +1,10 @@
 module ConcurrencyLimiter
   class ConcurrencyRestriction
-    attr_reader :queue_name, :limit
-    def initialize(queue_name, limit)
+    attr_reader :queue_name, :limit, :ttl
+    def initialize(queue_name, limit, ttl=5*60)
       @queue_name = queue_name.to_sym
       @limit = limit
+      @ttl = ttl
     end
 
     def to_s
@@ -15,15 +16,22 @@ module ConcurrencyLimiter
     end
 
     def increment(redis)
+      result = redis.get(redis_key)
+      return nil if result && result.to_i >= self.limit
+
       result = redis.watch(redis_key) do
         redis.multi do
           redis.incr(redis_key)
+          redis.expire(redis_key, self.ttl)
         end
       end
       result && result[0]
     end
 
     def decrement(redis)
+      # Risk for a race condition here as the key may expire
+      # after EXISTS but before DECR.
+      return unless redis.exists(redis_key)
       redis.decr(redis_key)
     end
   end
